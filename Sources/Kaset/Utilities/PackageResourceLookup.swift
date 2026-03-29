@@ -5,7 +5,8 @@ enum PackageResourceLookup {
     private static let resourceBundleName = "Kaset_Kaset.bundle"
     private static let accentColorName = NSColor.Name("AccentColor")
 
-    static let localizationBundle = Self.candidateBundles.first
+    static let bundle = Self.candidateBundles.first
+    static let localizationBundle = Self.bundle
 
     static let brandAccent: Color = {
         if let color = NSColor(named: accentColorName, bundle: Bundle.main) {

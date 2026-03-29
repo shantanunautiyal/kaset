@@ -71,6 +71,7 @@ struct MainWindow: View {
     }
 
     var body: some View {
+        let _ = DiagnosticsLogger.app.debug("MainWindow: body evaluation started")
         @Bindable var player = self.playerService
 
         ZStack(alignment: .bottomTrailing) {
@@ -83,6 +84,14 @@ struct MainWindow: View {
                 } else {
                     OnboardingView()
                 }
+            }
+            .onAppear {
+                DiagnosticsLogger.app.info("MainWindow: UI appeared")
+            }
+            .task {
+                DiagnosticsLogger.app.info("MainWindow: Starting login check check...")
+                await self.authService.checkLoginStatus()
+                DiagnosticsLogger.app.info("MainWindow: Login check complete")
             }
 
             // Persistent WebView - always present once a video has been requested
@@ -261,12 +270,14 @@ struct MainWindow: View {
                 self.detailView(for: self.navigationSelection, client: self.client)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            /*
             .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in
                 // Ensure sidebar is visible when window becomes key (e.g., restored from dock)
                 if self.columnVisibility != .all {
                     self.columnVisibility = .all
                 }
             }
+            */
 
             // Right sidebar overlay - either lyrics or queue (mutually exclusive)
             self.rightSidebarOverlay(client: self.client)

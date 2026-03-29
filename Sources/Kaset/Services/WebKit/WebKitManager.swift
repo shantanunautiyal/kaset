@@ -459,6 +459,8 @@ final class WebKitManager: NSObject, WebKitManagerProtocol {
     /// The YouTube Music origin URL.
     static let origin = "https://music.youtube.com"
 
+    let webExtensionController = WKWebExtensionController()
+
     /// Required cookie name for authentication.
     static let authCookieName = "__Secure-3PAPISID"
 
@@ -493,6 +495,28 @@ final class WebKitManager: NSObject, WebKitManagerProtocol {
         }
 
         self.logger.info("WebKitManager initialized with persistent data store")
+        
+        Task { await self.loadWebExtension() }
+    }
+
+    /// Returns `true` if any web extension is currently loaded.
+    var isExtensionLoaded: Bool {
+        #if compiler(>=5.9)
+        if #available(macOS 14.0, *) {
+            return !self.webExtensionController.extensionContexts.isEmpty
+        }
+        #endif
+        return false
+    }
+
+    /// Returns the version string of the loaded extension, if any.
+    var extensionVersion: String? {
+        #if compiler(>=5.9)
+        if #available(macOS 14.0, *) {
+            return self.webExtensionController.extensionContexts.first?.webExtension.version
+        }
+        #endif
+        return nil
     }
 
     /// Restores auth cookies from Keychain to WebKit.
@@ -552,6 +576,37 @@ final class WebKitManager: NSObject, WebKitManagerProtocol {
         }
     }
 
+    /// Loads the uBlock Origin web extension into the WebKit manager
+    private func loadWebExtension() async {
+        #if compiler(>=5.9)
+        if #available(macOS 14.0, *) {
+            let bundle = PackageResourceLookup.bundle ?? Bundle.main
+            guard let extensionsURL = bundle.url(forResource: "uBlockOrigin", withExtension: nil, subdirectory: "Extensions") else {
+                self.logger.error("Failed to find uBlockOrigin extension bundle")
+                return
+            }
+            
+            do {
+                let webExtension = try await WKWebExtension(resourceBaseURL: extensionsURL)
+                let context = WKWebExtensionContext(for: webExtension)
+                
+                for permission in webExtension.requestedPermissions {
+                    context.setPermissionStatus(.grantedExplicitly, for: permission)
+                }
+                
+                if let wildcard = try? WKWebExtension.MatchPattern(string: "<all_urls>") {
+                    context.setPermissionStatus(.grantedExplicitly, for: wildcard)
+                }
+                
+                try self.webExtensionController.load(context)
+                self.logger.info("Successfully loaded uBlock Origin web extension (\(webExtension.version ?? "unknown"))")
+            } catch {
+                self.logger.error("Failed to load uBlock Origin web extension: \(error.localizedDescription)")
+            }
+        }
+        #endif
+    }
+
     /// Creates a WebView configuration using the shared persistent data store.
     func createWebViewConfiguration() -> WKWebViewConfiguration {
         let configuration = WKWebViewConfiguration()
@@ -561,6 +616,12 @@ final class WebKitManager: NSObject, WebKitManagerProtocol {
 
         // Enable AirPlay for streaming to Apple TV, HomePod, etc.
         configuration.allowsAirPlayForMediaPlayback = true
+
+        #if compiler(>=5.9)
+        if #available(macOS 14.0, *) {
+            configuration.webExtensionController = self.webExtensionController
+        }
+        #endif
 
         return configuration
     }
