@@ -405,7 +405,12 @@ struct SettingsView: View {
                 .tabItem {
                     Label("Scrobbling", systemImage: "music.note.list")
                 }
+
+            ExtensionsSettingsView()
+                .tabItem {
+                    Label("Extensions", systemImage: "puzzlepiece.extension")
+                }
         }
-        .frame(width: 450, height: 400)
+        .frame(width: 460, height: 420)
     }
 }

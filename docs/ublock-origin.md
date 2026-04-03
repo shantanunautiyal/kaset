@@ -1,40 +1,40 @@
-# uBlock Origin Integration
+# Extensions Manager
 
-Kaset integrates **uBlock Origin** (built on top of Apple's `WKWebExtension` API) to ensure an ad-free and tracking-protected experience while listening to music.
+Kaset includes an **Extensions Manager** that lets you install any WebKit-compatible browser extension. No extensions are pre-installed — you're in full control.
 
-## How it works
+## Managing Extensions
 
-- **Engine**: The app uses the native `WKWebExtensionController` to load the uBlock Origin web extension.
-- **Rules**: It applies a standard set of filters to block ads and trackers on `music.youtube.com`.
-- **Performance**: Being a native WebKit extension, it operates efficiently without adding significant overhead to the UI or audio playback.
+Open **Settings** (⌘,) and navigate to the **Extensions** tab.
 
-## Verification
+### Adding an Extension
 
-You can check the status of uBlock Origin integration in the app:
-1.  Go to **Settings** (⌘,).
-2.  Navigate to the **General** tab.
-3.  Look for the **Content Blocking** section.
-    - If correctly loaded, you'll see "Active" along with the version number (e.g., `v1.70.0`).
+1. Click the **+** button in the Extensions tab header.
+2. Choose the **root directory** of a WebKit-compatible extension — the folder that contains `manifest.json`.
+3. Kaset reads the extension name from `manifest.json` and adds it to the list.
+4. Restart Kaset to load it.
 
-## How to Update
+> **Compatibility:** Extensions must use the [WebKit Web Extensions API](https://developer.apple.com/documentation/webkit/wkwebextension). Standard Manifest V3 extensions (Chrome/Firefox) may work if they don't rely on browser-specific APIs. uBlock Origin's Safari/WebKit build is a known-good example.
 
-To update uBlock Origin to a newer version, follow these steps:
+### Enabling / Disabling an Extension
 
-1.  **Download the latest version**: Obtain the latest uBlock Origin source compatible with Safari/WebKit.
-2.  **Locate the extension directory**: In the Kaset source code, go to `Sources/Kaset/Extensions/uBlockOrigin/`.
-3.  **Replace files**:
-    - Delete all existing files in that folder.
-    - Copy the new version's files into the same directory.
-    - Ensure the `manifest.json` file is present at the root of `uBlockOrigin/`.
-4.  **Rebuild the application**:
-    Run the build script to package the new extension version into the bundle:
-    ```bash
-    ./Scripts/compile_and_run.sh
-    ```
+Toggle the switch next to any extension. The change takes effect after a restart.
+
+### Removing an Extension
+
+Click the **trash** icon next to any extension, then restart Kaset.
+
+## How It Works
+
+- **Storage:** The list is saved as JSON at `~/Library/Application Support/Kaset/extensions.json`.
+- **Security:** Each extension directory is stored as a **security-scoped bookmark**, so Kaset retains access across restarts without re-prompting.
+- **Loading:** At launch, `WebKitManager` loads all enabled extensions in order via `WKWebExtensionController`, granting them all requested permissions.
 
 ## Troubleshooting
 
-If the Content Blocking section shows "Not loaded":
-- Check the console logs via **Console.app** for the subsystem `com.sertacozercan.Kaset` and category `WebKit`.
-- Ensure the folder `Extensions/uBlockOrigin` exists in the app bundle resources.
-- The extension requires **macOS 14.0 or later**; the app itself requires **macOS 26.0+**, so this condition is handled by the OS requirements.
+- **Extension not loading:** Open Console.app, filter by subsystem `com.sertacozercan.Kaset` and category `Extensions` or `WebKit`.
+- **Stale bookmark warning:** If you moved the extension directory, remove it in Settings and re-add it.
+- **Manifest not found:** Ensure your extension directory contains a `manifest.json` at its root.
+
+## Architecture
+
+See [ADR 0013](adr/0013-extensions-manager.md) for the full architectural decision record.

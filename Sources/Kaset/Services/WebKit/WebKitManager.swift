@@ -496,7 +496,7 @@ final class WebKitManager: NSObject, WebKitManagerProtocol {
 
         self.logger.info("WebKitManager initialized with persistent data store")
         
-        Task { await self.loadWebExtension() }
+        Task { await self.loadExtensions() }
     }
 
     /// Returns `true` if any web extension is currently loaded.
@@ -509,7 +509,17 @@ final class WebKitManager: NSObject, WebKitManagerProtocol {
         return false
     }
 
-    /// Returns the version string of the loaded extension, if any.
+    /// Number of currently loaded extensions.
+    var loadedExtensionCount: Int {
+        #if compiler(>=5.9)
+        if #available(macOS 14.0, *) {
+            return self.webExtensionController.extensionContexts.count
+        }
+        #endif
+        return 0
+    }
+
+    /// Returns the version string of the first loaded extension, if any.
     var extensionVersion: String? {
         #if compiler(>=5.9)
         if #available(macOS 14.0, *) {
@@ -576,35 +586,45 @@ final class WebKitManager: NSObject, WebKitManagerProtocol {
         }
     }
 
-    /// Loads the uBlock Origin web extension into the WebKit manager
-    private func loadWebExtension() async {
+    /// Loads all enabled extensions from `ExtensionsManager`.
+    private func loadExtensions() async {
         #if compiler(>=5.9)
         if #available(macOS 14.0, *) {
-            let bundle = PackageResourceLookup.bundle ?? Bundle.main
-            guard let extensionsURL = bundle.url(forResource: "uBlockOrigin", withExtension: nil, subdirectory: "Extensions") else {
-                self.logger.error("Failed to find uBlockOrigin extension bundle")
+            let resolvedURLs = ExtensionsManager.shared.resolvedURLs()
+            guard !resolvedURLs.isEmpty else {
+                self.logger.info("No enabled extensions to load")
                 return
             }
-            
-            do {
-                let webExtension = try await WKWebExtension(resourceBaseURL: extensionsURL)
-                let context = WKWebExtensionContext(for: webExtension)
-                
-                for permission in webExtension.requestedPermissions {
-                    context.setPermissionStatus(.grantedExplicitly, for: permission)
-                }
-                
-                if let wildcard = try? WKWebExtension.MatchPattern(string: "<all_urls>") {
-                    context.setPermissionStatus(.grantedExplicitly, for: wildcard)
-                }
-                
-                try self.webExtensionController.load(context)
-                self.logger.info("Successfully loaded uBlock Origin web extension (\(webExtension.version ?? "unknown"))")
-            } catch {
-                self.logger.error("Failed to load uBlock Origin web extension: \(error.localizedDescription)")
+
+            for entry in resolvedURLs {
+                await self.loadSingleExtension(at: entry.url)
             }
+
+            self.logger.info("Loaded \(self.webExtensionController.extensionContexts.count) extension(s)")
         }
         #endif
+    }
+
+    /// Loads a single web extension from a directory URL.
+    @available(macOS 14.0, *)
+    private func loadSingleExtension(at url: URL) async {
+        do {
+            let webExtension = try await WKWebExtension(resourceBaseURL: url)
+            let context = WKWebExtensionContext(for: webExtension)
+
+            for permission in webExtension.requestedPermissions {
+                context.setPermissionStatus(.grantedExplicitly, for: permission)
+            }
+
+            if let wildcard = try? WKWebExtension.MatchPattern(string: "<all_urls>") {
+                context.setPermissionStatus(.grantedExplicitly, for: wildcard)
+            }
+
+            try self.webExtensionController.load(context)
+            self.logger.info("Loaded extension \(url.lastPathComponent) (\(webExtension.version ?? "?"))")
+        } catch {
+            self.logger.error("Failed to load extension at \(url.path): \(error.localizedDescription)")
+        }
     }
 
     /// Creates a WebView configuration using the shared persistent data store.

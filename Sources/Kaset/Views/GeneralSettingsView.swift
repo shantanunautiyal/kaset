@@ -122,41 +122,6 @@ struct GeneralSettingsView: View {
                 Text("Updates")
             }
 
-            // MARK: - Content Blocking Section
-
-            Section {
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("uBlock Origin")
-                            .font(.headline)
-                        if WebKitManager.shared.isExtensionLoaded {
-                            Text("Active • v\(WebKitManager.shared.extensionVersion ?? "1.70.0")")
-                                .font(.caption)
-                                .foregroundStyle(.green)
-                        } else {
-                            Text("Not loaded")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    Spacer()
-                    if WebKitManager.shared.isExtensionLoaded {
-                        Image(systemName: "checkmark.shield.fill")
-                            .foregroundStyle(.green)
-                    } else {
-                        Image(systemName: "exclamationmark.shield")
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .padding(.vertical, 4)
-
-                Text("uBlock Origin is integrated to block ads and trackers on YouTube Music, ensuring a private and distraction-free experience.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } header: {
-                Text("Content Blocking")
-            }
-
             // MARK: - About Section
 
             Section {
