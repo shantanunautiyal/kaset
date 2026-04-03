@@ -10,6 +10,7 @@ struct ExtensionsSettingsView: View {
     @State private var manager = ExtensionsManager.shared
     @State private var showRestartAlert = false
     @State private var pendingChangeDescription = ""
+    @State private var configuringExtensionURL: URL?
 
     var body: some View {
         Form {
@@ -70,6 +71,22 @@ struct ExtensionsSettingsView: View {
         } message: {
             Text("\(self.pendingChangeDescription) will take effect after restarting Kaset.")
         }
+        .sheet(item: Binding(
+            get: { self.configuringExtensionURL.map { IdentifiableURL(url: $0) } },
+            set: { self.configuringExtensionURL = $0?.url }
+        )) { identURL in
+            NavigationStack {
+                ExtensionOptionsView(url: identURL.url)
+                    .frame(minWidth: 600, minHeight: 450)
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") {
+                                self.configuringExtensionURL = nil
+                            }
+                        }
+                    }
+            }
+        }
     }
 
     // MARK: - Extension Row
@@ -102,6 +119,15 @@ struct ExtensionsSettingsView: View {
             ))
             .labelsHidden()
 
+            if ext.isEnabled, let contextURL = WebKitManager.shared.optionsPageURL(forExtensionId: ext.id) {
+                Button("Options…") {
+                    self.configuringExtensionURL = contextURL
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.blue)
+                .help("Configure extension")
+            }
+
             Button(role: .destructive) {
                 self.manager.removeExtension(id: ext.id)
                 self.pendingChangeDescription = "Removing \"\(ext.name)\""
@@ -125,8 +151,8 @@ struct ExtensionsSettingsView: View {
         DiagnosticsLogger.extensions.info("presentOpenPanel() called")
 
         let panel = NSOpenPanel()
-        panel.title = "Choose Extension Folder"
-        panel.message = "Select the root directory of a WebKit-compatible extension (the folder containing manifest.json)."
+        panel.title = "Select Extension Folder"
+        panel.message = "Select the folder containing the extension's 'manifest.json' file."
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
@@ -147,11 +173,35 @@ struct ExtensionsSettingsView: View {
     }
 
     private func restartApp() {
+        DiagnosticsLogger.extensions.info("Restarting app...")
         let url = Bundle.main.bundleURL
+        
+        // Use a shell script to wait a second after we terminate, ensuring we don't 
+        // conflict with the existing process during re-launch.
+        let shellScript = "sleep 0.5; open '\(url.path)'"
+        
         let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-        task.arguments = [url.path]
-        try? task.run()
-        NSApplication.shared.terminate(nil)
+        task.executableURL = URL(fileURLWithPath: "/bin/sh")
+        task.arguments = ["-c", shellScript]
+        
+        do {
+            try task.run()
+            NSApplication.shared.terminate(nil)
+        } catch {
+            DiagnosticsLogger.extensions.error("Failed to run restart script: \(error.localizedDescription)")
+            // Fallback to simple open
+            let fallbackTask = Process()
+            fallbackTask.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+            fallbackTask.arguments = [url.path]
+            try? fallbackTask.run()
+            NSApplication.shared.terminate(nil)
+        }
     }
+}
+
+// MARK: - IdentifiableURL
+
+private struct IdentifiableURL: Identifiable {
+    let url: URL
+    var id: URL { url }
 }

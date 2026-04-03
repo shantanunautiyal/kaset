@@ -459,6 +459,10 @@ final class WebKitManager: NSObject, WebKitManagerProtocol {
     /// The YouTube Music origin URL.
     static let origin = "https://music.youtube.com"
 
+    @MainActor
+    let processPool = WKProcessPool()
+
+    @MainActor
     let webExtensionController = WKWebExtensionController()
 
     /// Required cookie name for authentication.
@@ -471,6 +475,8 @@ final class WebKitManager: NSObject, WebKitManagerProtocol {
     static let userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
 
     private let logger = DiagnosticsLogger.webKit
+
+    private var extensionContexts: [String: WKWebExtensionContext] = [:]
 
     override private init() {
         // Use the default persistent data store
@@ -495,6 +501,12 @@ final class WebKitManager: NSObject, WebKitManagerProtocol {
         }
 
         self.logger.info("WebKitManager initialized with persistent data store")
+        
+        #if compiler(>=5.9)
+        if #available(macOS 14.0, *) {
+            self.webExtensionController.delegate = self
+        }
+        #endif
         
         Task { await self.loadExtensions() }
     }
@@ -596,8 +608,8 @@ final class WebKitManager: NSObject, WebKitManagerProtocol {
                 return
             }
 
-            for entry in resolvedURLs {
-                await self.loadSingleExtension(at: entry.url)
+            for (id, url) in resolvedURLs {
+                await self.loadSingleExtension(at: url, id: id)
             }
 
             self.logger.info("Loaded \(self.webExtensionController.extensionContexts.count) extension(s)")
@@ -607,21 +619,60 @@ final class WebKitManager: NSObject, WebKitManagerProtocol {
 
     /// Loads a single web extension from a directory URL.
     @available(macOS 14.0, *)
-    private func loadSingleExtension(at url: URL) async {
+    private func loadSingleExtension(at url: URL, id: String) async {
         do {
             let webExtension = try await WKWebExtension(resourceBaseURL: url)
             let context = WKWebExtensionContext(for: webExtension)
+            
+            self.extensionContexts[id] = context
 
             for permission in webExtension.requestedPermissions {
                 context.setPermissionStatus(.grantedExplicitly, for: permission)
             }
 
-            if let wildcard = try? WKWebExtension.MatchPattern(string: "<all_urls>") {
-                context.setPermissionStatus(.grantedExplicitly, for: wildcard)
+            for permission in webExtension.optionalPermissions {
+                context.setPermissionStatus(.grantedExplicitly, for: permission)
+            }
+
+            for matchPattern in webExtension.requestedPermissionMatchPatterns {
+                context.setPermissionStatus(.grantedExplicitly, for: matchPattern)
+            }
+
+            for matchPattern in webExtension.optionalPermissionMatchPatterns {
+                context.setPermissionStatus(.grantedExplicitly, for: matchPattern)
+            }
+
+            let wildcardPatterns = [
+                "<all_urls>",
+                "*://*/*",
+                "*://*.youtube.com/*",
+                "*://*.google.com/*",
+                "*://*.googleusercontent.com/*",
+                "*://*.googlevideo.com/*"
+            ]
+
+            for pattern in wildcardPatterns {
+                if let match = try? WKWebExtension.MatchPattern(string: pattern) {
+                    context.setPermissionStatus(.grantedExplicitly, for: match)
+                }
+            }
+
+            // Explicitly grant declarativeNetRequest if available in current SDK
+            let extraPermissions = [
+                "declarativeNetRequest",
+                "declarativeNetRequestWithHostAccess",
+                "declarativeNetRequestFeedback",
+                "storage",
+                "unlimitedStorage"
+            ]
+            for permName in extraPermissions {
+                let perm = WKWebExtension.Permission(rawValue: permName)
+                context.setPermissionStatus(.grantedExplicitly, for: perm)
             }
 
             try self.webExtensionController.load(context)
-            self.logger.info("Loaded extension \(url.lastPathComponent) (\(webExtension.version ?? "?"))")
+            try? await context.loadBackgroundContent()
+            self.logger.info("Loaded extension \(webExtension.displayName ?? url.lastPathComponent) (\(webExtension.version ?? "?")). Options: \(context.optionsPageURL?.absoluteString ?? "none")")
         } catch {
             self.logger.error("Failed to load extension at \(url.path): \(error.localizedDescription)")
         }
@@ -630,20 +681,71 @@ final class WebKitManager: NSObject, WebKitManagerProtocol {
     /// Creates a WebView configuration using the shared persistent data store.
     func createWebViewConfiguration() -> WKWebViewConfiguration {
         let configuration = WKWebViewConfiguration()
+        configuration.processPool = self.processPool
         configuration.websiteDataStore = self.dataStore
+        
+        #if compiler(>=5.9)
+        if #available(macOS 14.0, *) {
+            configuration.webExtensionController = self.webExtensionController
+        }
+        #endif
+        
         configuration.preferences.isElementFullscreenEnabled = true
         configuration.mediaTypesRequiringUserActionForPlayback = []
 
         // Enable AirPlay for streaming to Apple TV, HomePod, etc.
         configuration.allowsAirPlayForMediaPlayback = true
 
+        return configuration
+    }
+
+    /// Gets the options page URL for a loaded extension by its Kaset internal ID.
+    func optionsPageURL(forExtensionId id: String) -> URL? {
         #if compiler(>=5.9)
         if #available(macOS 14.0, *) {
-            configuration.webExtensionController = self.webExtensionController
+            guard let context = self.extensionContexts[id] else { return nil }
+            
+            // Check ExtensionsManager for recorded paths from manifest.json
+            guard let managedExt = ExtensionsManager.shared.extensions.first(where: { $0.id == id }) else {
+                return context.optionsPageURL
+            }
+            
+            // Priority 1: Official options page from WebKit
+            if let optionsURL = context.optionsPageURL {
+                return optionsURL
+            }
+            
+            // Priority 2: Fallback to the path discovered in manifest.json
+            let relativePath = managedExt.optionsPath ?? managedExt.popupPath ?? "popup.html"
+            
+            // On macOS 14, we try to reconstruct the URL relative to the scheme base
+            // of the extension context if it exists.
+            if let baseContextURL = context.optionsPageURL?.deletingLastPathComponent() {
+                return URL(string: relativePath, relativeTo: baseContextURL)
+            }
         }
         #endif
+        return nil
+    }
 
-        return configuration
+    /// Gets the options page URL for a loaded extension by name (deprecated/fallback).
+    func optionsPageURL(forExtensionNamed name: String) -> URL? {
+        #if compiler(>=5.9)
+        if #available(macOS 14.0, *) {
+            self.logger.info("Looking for options page for extension: \(name)")
+            for context in self.webExtensionController.extensionContexts {
+                let displayName = context.webExtension.displayName ?? ""
+                self.logger.debug("Checking context: \(displayName)")
+                if displayName == name {
+                    let url = context.optionsPageURL
+                    self.logger.info("Found options page URL: \(url?.absoluteString ?? "nil")")
+                    return url
+                }
+            }
+            self.logger.warning("No extension found with display name: \(name)")
+        }
+        #endif
+        return nil
     }
 
     /// Waits for the one-time startup cookie restore to finish.
@@ -857,3 +959,18 @@ extension WebKitManager: WKHTTPCookieStoreObserver {
         }
     }
 }
+
+#if compiler(>=5.9)
+@available(macOS 14.0, *)
+extension WebKitManager: WKWebExtensionControllerDelegate {
+    func webExtensionController(_ controller: WKWebExtensionController, shouldShowPromptFor permissions: Set<WKWebExtension.Permission>, in context: WKWebExtensionContext) async -> Bool {
+        self.logger.info("Auto-granting prompt for permissions: \(permissions.map { $0.rawValue }.joined(separator: ", "))")
+        return true
+    }
+
+    func webExtensionController(_ controller: WKWebExtensionController, shouldShowPromptFor matchPatterns: Set<WKWebExtension.MatchPattern>, in context: WKWebExtensionContext) async -> Bool {
+        self.logger.info("Auto-granting prompt for match patterns: \(matchPatterns.map { $0.string }.joined(separator: ", "))")
+        return true
+    }
+}
+#endif

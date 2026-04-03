@@ -14,14 +14,32 @@ struct ManagedExtension: Codable, Identifiable, Equatable {
     /// Whether this extension is currently enabled.
     var isEnabled: Bool
 
-    /// Security-scoped bookmark data for the extension directory.
-    var bookmarkData: Data
+    /// Path to the local copy of the extension in Application Support.
+    var relativePath: String
+    
+    /// The options page path from manifest.json (e.g. "options.html")
+    var optionsPath: String?
+    
+    /// The popup path from manifest.json (e.g. "popup.html")
+    var popupPath: String?
+    
+    /// Local security-scoped bookmark for the cloned folder (needed for some sandbox processes)
+    var localBookmark: Data?
 
-    init(id: String = UUID().uuidString, name: String, isEnabled: Bool, bookmarkData: Data) {
+    init(id: String = UUID().uuidString, 
+         name: String, 
+         isEnabled: Bool, 
+         relativePath: String,
+         optionsPath: String? = nil,
+         popupPath: String? = nil,
+         localBookmark: Data? = nil) {
         self.id = id
         self.name = name
         self.isEnabled = isEnabled
-        self.bookmarkData = bookmarkData
+        self.relativePath = relativePath
+        self.optionsPath = optionsPath
+        self.popupPath = popupPath
+        self.localBookmark = localBookmark
     }
 }
 
@@ -86,78 +104,115 @@ final class ExtensionsManager {
     func resolvedURLs() -> [(id: String, url: URL)] {
         var result: [(id: String, url: URL)] = []
 
+        guard let base = Self.persistenceURL?.deletingLastPathComponent().appendingPathComponent("ManagedExtensions", isDirectory: true) else {
+            return []
+        }
+
         for ext in self.extensions where ext.isEnabled {
-            var isStale = false
-            do {
-                let url = try URL(
-                    resolvingBookmarkData: ext.bookmarkData,
-                    options: .withSecurityScope,
-                    relativeTo: nil,
-                    bookmarkDataIsStale: &isStale
-                )
-                guard url.startAccessingSecurityScopedResource() else {
-                    self.logger.warning("Could not start security-scoped access for \(ext.name)")
-                    continue
+            let url = base.appendingPathComponent(ext.relativePath)
+            
+            // If we have a local bookmark, resolve it to ensure sandbox access for all processes
+            if let bookmarkData = ext.localBookmark {
+                var isStale = false
+                if let resolved = try? URL(resolvingBookmarkData: bookmarkData, options: .withSecurityScope, relativeTo: nil, bookmarkDataIsStale: &isStale),
+                   resolved.startAccessingSecurityScopedResource() {
+                     result.append((id: ext.id, url: resolved))
+                     continue
                 }
-                if isStale {
-                    self.logger.warning("Bookmark for \(ext.name) is stale; re-add it in Settings")
-                }
+            }
+            
+            // Fallback to direct URL if bookmark fails
+            if FileManager.default.fileExists(atPath: url.path) {
                 result.append((id: ext.id, url: url))
-            } catch {
-                self.logger.error("Failed to resolve bookmark for \(ext.name): \(error.localizedDescription)")
+            } else {
+                self.logger.warning("Extension \(ext.name) files missing at: \(url.path)")
             }
         }
 
         return result
     }
 
-    /// Stops security-scoped access for all currently resolved extensions.
+    /// Stops security-scoped access for all currently resolved extensions (obsolete).
     func stopAllAccess() {
-        for ext in self.extensions {
-            var isStale = false
-            guard let url = try? URL(
-                resolvingBookmarkData: ext.bookmarkData,
-                options: .withSecurityScope,
-                relativeTo: nil,
-                bookmarkDataIsStale: &isStale
-            ) else { continue }
-            url.stopAccessingSecurityScopedResource()
-        }
     }
 
     /// Adds an extension from a directory URL chosen by the user.
     /// Creates a security-scoped bookmark for persistent access.
+    /// Adds an extension from a folder containing manifest.json.
+    /// Analyzes the manifest structure before attempting to copy.
     func addExtension(at url: URL) throws {
-        let bookmarkData = try url.bookmarkData(
-            options: .withSecurityScope,
-            includingResourceValuesForKeys: nil,
-            relativeTo: nil
-        )
-
-        // Read display name from manifest.json when available.
+        // 1. Analyze the manifest first
         let manifestURL = url.appendingPathComponent("manifest.json")
-        let name: String
-        if let data = try? Data(contentsOf: manifestURL),
-           let manifest = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-           let manifestName = manifest["name"] as? String {
-            name = manifestName
-        } else {
-            name = url.lastPathComponent
+        guard FileManager.default.fileExists(atPath: manifestURL.path) else {
+             throw NSError(domain: "ExtensionsManager", code: 1, userInfo: [NSLocalizedDescriptionKey: "manifest.json not found in the selected folder."])
+        }
+        
+        let accessingSource = url.startAccessingSecurityScopedResource()
+        defer { if accessingSource { url.stopAccessingSecurityScopedResource() } }
+
+        guard let data = try? Data(contentsOf: manifestURL),
+              let manifest = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw NSError(domain: "ExtensionsManager", code: 2, userInfo: [NSLocalizedDescriptionKey: "Could not read or parse manifest.json."])
         }
 
-        let entry = ManagedExtension(name: name, isEnabled: true, bookmarkData: bookmarkData)
+        // 2. Extract metadata
+        let manifestName = (manifest["name"] as? String) ?? url.lastPathComponent
+        let name = manifestName.hasPrefix("__MSG_") ? url.lastPathComponent : manifestName
+        let manifestVersion = (manifest["manifest_version"] as? Int) ?? 0
+        
+        var optionsPath: String?
+        if let optionsUI = manifest["options_ui"] as? [String: Any] {
+            optionsPath = optionsUI["page"] as? String
+        } else {
+            optionsPath = manifest["options_page"] as? String
+        }
+        
+        var popupPath: String?
+        if let action = (manifest["action"] as? [String: Any]) ?? (manifest["browser_action"] as? [String: Any]) {
+            popupPath = action["default_popup"] as? String
+        }
+
+        self.logger.info("Manifest Analysis: Name=\(name), V\(manifestVersion), Options=\(optionsPath ?? "none"), Popup=\(popupPath ?? "none")")
+
+        // 3. Perform Copy
+        let extensionsDir = Self.persistenceURL!.deletingLastPathComponent().appendingPathComponent("ManagedExtensions", isDirectory: true)
+        try FileManager.default.createDirectory(at: extensionsDir, withIntermediateDirectories: true)
+
+        let relativePath = UUID().uuidString
+        let destURL = extensionsDir.appendingPathComponent(relativePath, isDirectory: true)
+        
+        try FileManager.default.copyItem(at: url, to: destURL)
+        
+        // 4. Persistence
+        let localBookmark = try? destURL.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil)
+
+        let entry = ManagedExtension(
+            id: relativePath, 
+            name: name, 
+            isEnabled: true, 
+            relativePath: relativePath, 
+            optionsPath: optionsPath, 
+            popupPath: popupPath,
+            localBookmark: localBookmark
+        )
         self.extensions.append(entry)
         self.save()
-        self.logger.info("Added extension: \(name)")
+        self.logger.info("Successfully installed extension: \(name)")
     }
 
     /// Removes an extension by its ID.
     func removeExtension(id: String) {
         guard let idx = self.extensions.firstIndex(where: { $0.id == id }) else { return }
         let name = self.extensions[idx].name
-        self.extensions.remove(at: idx)
-        self.save()
-        self.logger.info("Removed extension: \(name)")
+        if let index = self.extensions.firstIndex(where: { $0.id == id }) {
+            let ext = self.extensions[index]
+            let extensionsDir = Self.persistenceURL!.deletingLastPathComponent().appendingPathComponent("Extensions")
+            let destURL = extensionsDir.appendingPathComponent(ext.relativePath)
+            try? FileManager.default.removeItem(at: destURL)
+            
+            self.extensions.remove(at: index)
+            self.save()
+        }
     }
 
     /// Toggles the enabled state of an extension.
