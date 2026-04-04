@@ -50,13 +50,7 @@ extension SingletonPlayerWebView {
                 }
             })();
         """
-        webView.evaluateJavaScript(script) { _, error in
-            if let error {
-                DiagnosticsLogger.player.error("Failed to inject blackout CSS: \(error.localizedDescription, privacy: .public)")
-            } else {
-                DiagnosticsLogger.player.debug("Blackout CSS injected")
-            }
-        }
+        webView.evaluateJavaScript(script) { _, _ in }
     }
 
     /// Waits for the WebView's superview to have valid (non-zero) bounds, then injects CSS.

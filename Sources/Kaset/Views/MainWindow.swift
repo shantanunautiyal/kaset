@@ -71,7 +71,6 @@ struct MainWindow: View {
     }
 
     var body: some View {
-        let _ = DiagnosticsLogger.app.debug("MainWindow: body evaluation started")
         @Bindable var player = self.playerService
 
         ZStack(alignment: .bottomTrailing) {
