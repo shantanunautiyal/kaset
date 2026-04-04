@@ -16,19 +16,19 @@ struct ManagedExtension: Codable, Identifiable, Equatable {
 
     /// Path to the local copy of the extension in Application Support.
     var relativePath: String
-    
+
     /// The options page path from manifest.json (e.g. "options.html")
     var optionsPath: String?
-    
+
     /// The popup path from manifest.json (e.g. "popup.html")
     var popupPath: String?
-    
+
     /// Local security-scoped bookmark for the cloned folder (needed for some sandbox processes)
     var localBookmark: Data?
 
-    init(id: String = UUID().uuidString, 
-         name: String, 
-         isEnabled: Bool, 
+    init(id: String = UUID().uuidString,
+         name: String,
+         isEnabled: Bool,
          relativePath: String,
          optionsPath: String? = nil,
          popupPath: String? = nil,
@@ -110,7 +110,7 @@ final class ExtensionsManager {
 
         for ext in self.extensions where ext.isEnabled {
             let url = base.appendingPathComponent(ext.relativePath)
-            
+
             // If we have a local bookmark, resolve it to ensure sandbox access for all processes
             if let bookmarkData = ext.localBookmark {
                 var isStale = false
@@ -120,7 +120,7 @@ final class ExtensionsManager {
                      continue
                 }
             }
-            
+
             // Fallback to direct URL if bookmark fails
             if FileManager.default.fileExists(atPath: url.path) {
                 result.append((id: ext.id, url: url))
@@ -146,7 +146,7 @@ final class ExtensionsManager {
         guard FileManager.default.fileExists(atPath: manifestURL.path) else {
              throw NSError(domain: "ExtensionsManager", code: 1, userInfo: [NSLocalizedDescriptionKey: "manifest.json not found in the selected folder."])
         }
-        
+
         let accessingSource = url.startAccessingSecurityScopedResource()
         defer { if accessingSource { url.stopAccessingSecurityScopedResource() } }
 
@@ -159,14 +159,14 @@ final class ExtensionsManager {
         let manifestName = (manifest["name"] as? String) ?? url.lastPathComponent
         let name = manifestName.hasPrefix("__MSG_") ? url.lastPathComponent : manifestName
         let manifestVersion = (manifest["manifest_version"] as? Int) ?? 0
-        
+
         var optionsPath: String?
         if let optionsUI = manifest["options_ui"] as? [String: Any] {
             optionsPath = optionsUI["page"] as? String
         } else {
             optionsPath = manifest["options_page"] as? String
         }
-        
+
         var popupPath: String?
         if let action = (manifest["action"] as? [String: Any]) ?? (manifest["browser_action"] as? [String: Any]) {
             popupPath = action["default_popup"] as? String
@@ -180,18 +180,18 @@ final class ExtensionsManager {
 
         let relativePath = UUID().uuidString
         let destURL = extensionsDir.appendingPathComponent(relativePath, isDirectory: true)
-        
+
         try FileManager.default.copyItem(at: url, to: destURL)
-        
+
         // 4. Persistence
         let localBookmark = try? destURL.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil)
 
         let entry = ManagedExtension(
-            id: relativePath, 
-            name: name, 
-            isEnabled: true, 
-            relativePath: relativePath, 
-            optionsPath: optionsPath, 
+            id: relativePath,
+            name: name,
+            isEnabled: true,
+            relativePath: relativePath,
+            optionsPath: optionsPath,
             popupPath: popupPath,
             localBookmark: localBookmark
         )
@@ -207,7 +207,7 @@ final class ExtensionsManager {
         let extensionsDir = Self.persistenceURL!.deletingLastPathComponent().appendingPathComponent("ManagedExtensions", isDirectory: true)
         let destURL = extensionsDir.appendingPathComponent(ext.relativePath)
         try? FileManager.default.removeItem(at: destURL)
-        
+
         self.extensions.remove(at: index)
         self.save()
     }

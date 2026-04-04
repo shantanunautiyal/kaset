@@ -324,10 +324,10 @@ final class SingletonPlayerWebView {
         webView.translatesAutoresizingMaskIntoConstraints = true
         webView.frame = container.bounds
         webView.autoresizingMask = [.width, .height]
-        
+
         // Note: Don't re-inject CSS here if we're already in video mode.
         // Re-injecting causes the YouTube UI to briefly flicker back in because it
-        // removes and re-creates our custom video container. 
+        // removes and re-creates our custom video container.
         // updateDisplayMode(.video) handles the initial injection perfectly.
     }
 
@@ -515,7 +515,7 @@ final class SingletonPlayerWebView {
                     // We only close if the videoId actually changed to prevent closing
                     // due to spurious metadata (title/artist) glitches during resize.
                     let videoIdChanged = observedVideoId != nil && observedVideoId != self.playerService.currentTrack?.videoId
-                    
+
                     if self.playerService.showVideo, videoIdChanged, !self.playerService.isVideoGracePeriodActive {
                         DiagnosticsLogger.player.info(
                             "trackChanged to videoId '\(observedVideoId ?? "unknown")' while video shown - closing video window"
@@ -577,11 +577,11 @@ final class SingletonPlayerWebView {
                 if SingletonPlayerWebView.shared.isLyricsPollActive {
                     SingletonPlayerWebView.shared.startLyricsPoll()
                 }
-                
+
                 // Re-inject video mode CSS if it was active
                 if SingletonPlayerWebView.shared.displayMode == .video {
                     SingletonPlayerWebView.shared.refreshVideoModeCSS()
-                    // If refresh fails to find the container (because it's a new page), 
+                    // If refresh fails to find the container (because it's a new page),
                     // it will log a debug message. We should also call the full injection.
                     SingletonPlayerWebView.shared.injectVideoModeCSS()
                 }

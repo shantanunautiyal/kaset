@@ -12,10 +12,10 @@ struct ExtensionOptionsView: NSViewRepresentable {
         #if os(macOS)
             config.webExtensionController = WebKitManager.shared.webExtensionController
         #endif
-        
+
         // Setup bridge
         let controller = WKUserContentController()
-        
+
         // Inject script to pipe console to native
         let consoleProxyScript = WKUserScript(
             source: """
@@ -46,10 +46,10 @@ struct ExtensionOptionsView: NSViewRepresentable {
         )
         config.userContentController.addUserScript(consoleProxyScript)
         config.userContentController.add(context.coordinator, name: "optionsDebug")
-        
+
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.isInspectable = true
-        
+
         webView.navigationDelegate = context.coordinator
         webView.load(URLRequest(url: url))
         return webView
@@ -76,7 +76,7 @@ struct ExtensionOptionsView: NSViewRepresentable {
                 DiagnosticsLogger.extensions.info("Options Console: \(String(describing: message.body))")
             }
         }
-        
+
         func webView(_: WKWebView, didStartProvisionalNavigation _: WKNavigation!) {
             DiagnosticsLogger.extensions.info("Options page: Provisional navigation started.")
         }

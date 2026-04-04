@@ -71,7 +71,7 @@ final class VideoWindowController {
         window.aspectRatio = NSSize(width: 16, height: 9)
         window.minSize = NSSize(width: 160, height: 90)
         window.backgroundColor = .black
-        
+
         // Use Sparkle/macOS style frame persistence
         window.setFrameAutosaveName(self.frameAutosaveKey)
 

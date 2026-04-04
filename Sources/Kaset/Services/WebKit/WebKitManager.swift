@@ -501,13 +501,13 @@ final class WebKitManager: NSObject, WebKitManagerProtocol {
         }
 
         self.logger.info("WebKitManager initialized with persistent data store")
-        
+
         #if compiler(>=5.9)
         if #available(macOS 14.0, *) {
             self.webExtensionController.delegate = self
         }
         #endif
-        
+
         Task { await self.loadExtensions() }
     }
 
@@ -623,7 +623,7 @@ final class WebKitManager: NSObject, WebKitManagerProtocol {
         do {
             let webExtension = try await WKWebExtension(resourceBaseURL: url)
             let context = WKWebExtensionContext(for: webExtension)
-            
+
             self.extensionContexts[id] = context
 
             for permission in webExtension.requestedPermissions {
@@ -683,13 +683,13 @@ final class WebKitManager: NSObject, WebKitManagerProtocol {
         let configuration = WKWebViewConfiguration()
         configuration.processPool = self.processPool
         configuration.websiteDataStore = self.dataStore
-        
+
         #if compiler(>=5.9)
         if #available(macOS 14.0, *) {
             configuration.webExtensionController = self.webExtensionController
         }
         #endif
-        
+
         configuration.preferences.isElementFullscreenEnabled = true
         configuration.mediaTypesRequiringUserActionForPlayback = []
 
@@ -704,20 +704,20 @@ final class WebKitManager: NSObject, WebKitManagerProtocol {
         #if compiler(>=5.9)
         if #available(macOS 14.0, *) {
             guard let context = self.extensionContexts[id] else { return nil }
-            
+
             // Check ExtensionsManager for recorded paths from manifest.json
             guard let managedExt = ExtensionsManager.shared.extensions.first(where: { $0.id == id }) else {
                 return context.optionsPageURL
             }
-            
+
             // Priority 1: Official options page from WebKit
             if let optionsURL = context.optionsPageURL {
                 return optionsURL
             }
-            
+
             // Priority 2: Fallback to the path discovered in manifest.json
             let relativePath = managedExt.optionsPath ?? managedExt.popupPath ?? "popup.html"
-            
+
             // On macOS 14, we try to reconstruct the URL relative to the scheme base
             // of the extension context if it exists.
             if let baseContextURL = context.optionsPageURL?.deletingLastPathComponent() {

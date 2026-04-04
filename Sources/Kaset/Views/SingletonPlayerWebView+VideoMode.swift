@@ -238,7 +238,7 @@ extension SingletonPlayerWebView {
         """
         (function() {
             'use strict';
-            
+
             // 1. Create a global style to hide EVERYTHING by default
             // Then specifically un-hide only the player tree.
             const styleId = 'kaset-video-mode-style-v2';
@@ -248,7 +248,7 @@ extension SingletonPlayerWebView {
                 style.id = styleId;
                 document.head.appendChild(style);
             }
-            
+
             style.textContent = `
                 /* Hide everything by default */
                 html, body, * {
@@ -291,15 +291,15 @@ extension SingletonPlayerWebView {
                     visibility: visible !important;
                 }
             `;
-            
+
             // 2. Identify the video and mark its ancestors
             const markAncestors = () => {
                 const video = document.querySelector('video');
                 if (!video) return;
-                
+
                 // Clear old marks
                 document.querySelectorAll('.kaset-visible').forEach(el => el.classList.remove('kaset-visible'));
-                
+
                 // Mark current video and all its parents
                 let current = video;
                 while (current && current !== document.documentElement) {
@@ -326,7 +326,7 @@ extension SingletonPlayerWebView {
             };
             window.__kasetVideoModeActive = true;
             requestAnimationFrame(enforceVisibility);
-            
+
             // Remove the extraction container if it exists from previous attempts
             const oldContainer = document.getElementById('kaset-video-container');
             if (oldContainer) {
@@ -348,7 +348,7 @@ extension SingletonPlayerWebView {
     /// Removes the video container and restores the video to its original location.
     func removeVideoModeCSS() {
         guard let webView else { return }
-        
+
         let script = """
             (function() {
                 // Remove blackout overlay

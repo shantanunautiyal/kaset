@@ -9,7 +9,7 @@ struct VideoPlayerWindow: View {
     @Environment(PlayerService.self) private var playerService
 
     var body: some View {
-        // The Window controls the aspect ratio and min size; 
+        // The Window controls the aspect ratio and min size;
         // using .fit here can cause the webview to shrink/be letterboxed incorrectly during fast resize.
         VideoWebViewContainer()
             .background(.black)
