@@ -210,12 +210,10 @@ extension SingletonPlayerWebView {
         guard let webView else { return }
 
         // Use superview frame since that's the actual container size
-        let superviewFrame = webView.superview?.frame ?? .zero
-        let width = Int(superviewFrame.width > 0 ? superviewFrame.width : 480)
-        let height = Int(superviewFrame.height > 0 ? superviewFrame.height : 270)
+        _ = webView.superview?.frame ?? .zero
 
         let script = Self.videoContainerScriptInPlace()
-        webView.evaluateJavaScript(script) { [weak self] result, error in
+        webView.evaluateJavaScript(script) { [weak self] _, error in
             if let error {
                 DiagnosticsLogger.player.error("Failed to inject video mode styles: \(error.localizedDescription, privacy: .public)")
                 self?.removeBlackoutOnly()
@@ -396,17 +394,15 @@ extension SingletonPlayerWebView {
                 const playerPage = document.querySelector('ytmusic-player-page');
                 if (playerPage && typeof playerPage.videoMode !== 'undefined' && playerPage.videoMode !== true) {
                     playerPage.videoMode = true;
-                    if (typeof playerPage.onVideoModeChanged === 'function') playerPage.onVideoModeChanged();
+                    if (typeof playerPage.onVideoModeChanged === 'function') {
+                        playerPage.onVideoModeChanged();
+                    }
                 }
 
                 return { success: true };
             })();
         """
-        webView.evaluateJavaScript(refreshScript) { result, error in
-            if let error {
-                DiagnosticsLogger.player.error("Failed to refresh video mode: \(error.localizedDescription)")
-                return
-            }
+        webView.evaluateJavaScript(refreshScript) { result, _ in
             if let dict = result as? [String: Any],
                let success = dict["success"] as? Bool,
                !success

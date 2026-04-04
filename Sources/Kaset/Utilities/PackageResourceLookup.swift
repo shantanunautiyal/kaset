@@ -41,6 +41,18 @@ enum PackageResourceLookup {
     private static let candidateBundles: [Bundle] = {
         var bundles: [Bundle] = []
         var seenPaths = Set<String>()
+
+        // 1. Try to find the bundle via current module reference (most reliable)
+        // In SwiftPM, targets with resources have a generated Bundle.module.
+        // We use a known class from this target to find the right bundle.
+        let classBundle = Bundle(for: WebKitManager.self)
+        if let moduleBundleURL = classBundle.resourceURL?.appendingPathComponent(Self.resourceBundleName),
+           let moduleBundle = Bundle(url: moduleBundleURL) {
+            bundles.append(moduleBundle)
+            seenPaths.insert(moduleBundleURL.path)
+        }
+
+        // 2. Standard search roots
         var candidateURLs: [URL] = Self.bundleSearchRoots.flatMap { bundle in
             Self.candidateURLs(for: bundle)
         }
