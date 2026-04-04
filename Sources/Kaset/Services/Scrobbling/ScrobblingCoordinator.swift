@@ -398,4 +398,3 @@ final class ScrobblingCoordinator {
         }
     }
 }
-

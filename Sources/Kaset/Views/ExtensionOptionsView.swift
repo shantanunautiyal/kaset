@@ -10,7 +10,7 @@ struct ExtensionOptionsView: NSViewRepresentable {
         let config = WKWebViewConfiguration()
         config.processPool = WebKitManager.shared.processPool
         #if os(macOS)
-        config.webExtensionController = WebKitManager.shared.webExtensionController
+            config.webExtensionController = WebKitManager.shared.webExtensionController
         #endif
         
         // Setup bridge
@@ -55,13 +55,13 @@ struct ExtensionOptionsView: NSViewRepresentable {
         return webView
     }
 
-    func updateNSView(_ webView: WKWebView, context: Context) {
-        if webView.url != url && !webView.isLoading {
+    func updateNSView(_ webView: WKWebView, context _: Context) {
+        if webView.url != self.url, !webView.isLoading {
             // Tiny delay to ensure WebKit's internal extension registry has catch up with the ID
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(100))
-                DiagnosticsLogger.extensions.info("ExtensionOptionsView loading URL: \(url.absoluteString)")
-                webView.load(URLRequest(url: url))
+                DiagnosticsLogger.extensions.info("ExtensionOptionsView loading URL: \(self.url.absoluteString)")
+                webView.load(URLRequest(url: self.url))
             }
         }
     }
@@ -71,27 +71,31 @@ struct ExtensionOptionsView: NSViewRepresentable {
     }
 
     class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
-        func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        func userContentController(_: WKUserContentController, didReceive message: WKScriptMessage) {
             if message.name == "optionsDebug" {
                 DiagnosticsLogger.extensions.info("Options Console: \(String(describing: message.body))")
             }
         }
         
-        func webView(_ webView: WKWebView, didStartProvisionalNavigation _: WKNavigation!) {
+        func webView(_: WKWebView, didStartProvisionalNavigation _: WKNavigation!) {
             DiagnosticsLogger.extensions.info("Options page: Provisional navigation started.")
         }
-        func webView(_ webView: WKWebView, didCommit _: WKNavigation!) {
+
+        func webView(_: WKWebView, didCommit _: WKNavigation!) {
             DiagnosticsLogger.extensions.info("Options page: Navigation committed.")
         }
-        func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+
+        func webView(_: WKWebView, didFailProvisionalNavigation _: WKNavigation!, withError error: Error) {
             let nsError = error as NSError
             DiagnosticsLogger.extensions.error("Options page navigation failed (Code \(nsError.code)): \(error.localizedDescription)")
         }
-        func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+
+        func webView(_: WKWebView, didFail _: WKNavigation!, withError error: Error) {
             let nsError = error as NSError
             DiagnosticsLogger.extensions.error("Options page load failed (Code \(nsError.code)): \(error.localizedDescription)")
         }
-        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+
+        func webView(_: WKWebView, didFinish _: WKNavigation!) {
             DiagnosticsLogger.extensions.info("Options page loaded successfully.")
         }
     }

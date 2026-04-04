@@ -91,7 +91,6 @@ struct ExtensionsSettingsView: View {
 
     // MARK: - Extension Row
 
-    @ViewBuilder
     private func extensionRow(_ ext: ManagedExtension) -> some View {
         HStack(spacing: 12) {
             Image(systemName: "puzzlepiece.extension.fill")
@@ -175,15 +174,12 @@ struct ExtensionsSettingsView: View {
     private func restartApp() {
         DiagnosticsLogger.extensions.info("Restarting app...")
         let url = Bundle.main.bundleURL
-        
-        // Use a shell script to wait a second after we terminate, ensuring we don't 
+        // Use a shell script to wait a second after we terminate, ensuring we don't
         // conflict with the existing process during re-launch.
         let shellScript = "sleep 0.5; open '\(url.path)'"
-        
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/bin/sh")
         task.arguments = ["-c", shellScript]
-        
         do {
             try task.run()
             NSApplication.shared.terminate(nil)
@@ -203,5 +199,7 @@ struct ExtensionsSettingsView: View {
 
 private struct IdentifiableURL: Identifiable {
     let url: URL
-    var id: URL { url }
+    var id: URL {
+        self.url
+    }
 }

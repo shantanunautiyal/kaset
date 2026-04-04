@@ -202,17 +202,14 @@ final class ExtensionsManager {
 
     /// Removes an extension by its ID.
     func removeExtension(id: String) {
-        guard let idx = self.extensions.firstIndex(where: { $0.id == id }) else { return }
-        let name = self.extensions[idx].name
-        if let index = self.extensions.firstIndex(where: { $0.id == id }) {
-            let ext = self.extensions[index]
-            let extensionsDir = Self.persistenceURL!.deletingLastPathComponent().appendingPathComponent("Extensions")
-            let destURL = extensionsDir.appendingPathComponent(ext.relativePath)
-            try? FileManager.default.removeItem(at: destURL)
-            
-            self.extensions.remove(at: index)
-            self.save()
-        }
+        guard let index = self.extensions.firstIndex(where: { $0.id == id }) else { return }
+        let ext = self.extensions[index]
+        let extensionsDir = Self.persistenceURL!.deletingLastPathComponent().appendingPathComponent("ManagedExtensions", isDirectory: true)
+        let destURL = extensionsDir.appendingPathComponent(ext.relativePath)
+        try? FileManager.default.removeItem(at: destURL)
+        
+        self.extensions.remove(at: index)
+        self.save()
     }
 
     /// Toggles the enabled state of an extension.

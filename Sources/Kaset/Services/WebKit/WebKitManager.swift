@@ -731,19 +731,19 @@ final class WebKitManager: NSObject, WebKitManagerProtocol {
     /// Gets the options page URL for a loaded extension by name (deprecated/fallback).
     func optionsPageURL(forExtensionNamed name: String) -> URL? {
         #if compiler(>=5.9)
-        if #available(macOS 14.0, *) {
-            self.logger.info("Looking for options page for extension: \(name)")
-            for context in self.webExtensionController.extensionContexts {
-                let displayName = context.webExtension.displayName ?? ""
-                self.logger.debug("Checking context: \(displayName)")
-                if displayName == name {
-                    let url = context.optionsPageURL
-                    self.logger.info("Found options page URL: \(url?.absoluteString ?? "nil")")
-                    return url
+            if #available(macOS 14.0, *) {
+                self.logger.info("Looking for options page for extension: \(name)")
+                for context in self.webExtensionController.extensionContexts {
+                    let displayName = context.webExtension.displayName ?? ""
+                    self.logger.debug("Checking context: \(displayName)")
+                    if displayName == name {
+                        let url = context.optionsPageURL
+                        self.logger.info("Found options page URL: \(url?.absoluteString ?? "nil")")
+                        return url
+                    }
                 }
+                self.logger.warning("No extension found with display name: \(name)")
             }
-            self.logger.warning("No extension found with display name: \(name)")
-        }
         #endif
         return nil
     }
@@ -961,16 +961,16 @@ extension WebKitManager: WKHTTPCookieStoreObserver {
 }
 
 #if compiler(>=5.9)
-@available(macOS 14.0, *)
-extension WebKitManager: WKWebExtensionControllerDelegate {
-    func webExtensionController(_ controller: WKWebExtensionController, shouldShowPromptFor permissions: Set<WKWebExtension.Permission>, in context: WKWebExtensionContext) async -> Bool {
-        self.logger.info("Auto-granting prompt for permissions: \(permissions.map { $0.rawValue }.joined(separator: ", "))")
-        return true
-    }
+    @available(macOS 14.0, *)
+    extension WebKitManager: WKWebExtensionControllerDelegate {
+        func webExtensionController(_: WKWebExtensionController, shouldShowPromptFor permissions: Set<WKWebExtension.Permission>, in _: WKWebExtensionContext) async -> Bool {
+            self.logger.info("Auto-granting prompt for permissions: \(permissions.map(\.rawValue).joined(separator: ", "))")
+            return true
+        }
 
-    func webExtensionController(_ controller: WKWebExtensionController, shouldShowPromptFor matchPatterns: Set<WKWebExtension.MatchPattern>, in context: WKWebExtensionContext) async -> Bool {
-        self.logger.info("Auto-granting prompt for match patterns: \(matchPatterns.map { $0.string }.joined(separator: ", "))")
-        return true
+        func webExtensionController(_: WKWebExtensionController, shouldShowPromptFor matchPatterns: Set<WKWebExtension.MatchPattern>, in _: WKWebExtensionContext) async -> Bool {
+            self.logger.info("Auto-granting prompt for match patterns: \(matchPatterns.map(\.string).joined(separator: ", "))")
+            return true
+        }
     }
-}
 #endif
