@@ -38,7 +38,7 @@ final class NotificationService {
                     .requestAuthorization(options: [.alert])
                 self.logger.info("Notification authorization: \(granted)")
             } catch {
-                self.logger.error("Notification authorization failed: \(error.localizedDescription)")
+                self.logger.error("Notification authorization failed: \(error.localizedDescription, privacy: .public)")
             }
         }
     }
