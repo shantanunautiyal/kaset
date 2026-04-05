@@ -8,13 +8,9 @@ struct ExtensionOptionsView: NSViewRepresentable {
 
     func makeNSView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
-        config.processPool = WebKitManager.shared.processPool
         #if os(macOS)
             config.webExtensionController = WebKitManager.shared.webExtensionController
         #endif
-
-        // Setup bridge
-        let controller = WKUserContentController()
 
         // Inject script to pipe console to native
         let consoleProxyScript = WKUserScript(

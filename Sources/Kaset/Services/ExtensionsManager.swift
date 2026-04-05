@@ -162,7 +162,7 @@ final class ExtensionsManager {
         let name = manifestName.hasPrefix("__MSG_") ? url.lastPathComponent : manifestName
         let manifestVersion = (manifest["manifest_version"] as? Int) ?? 0
 
-        var optionsPath: String? = if let optionsUI = manifest["options_ui"] as? [String: Any] {
+        let optionsPath: String? = if let optionsUI = manifest["options_ui"] as? [String: Any] {
             optionsUI["page"] as? String
         } else {
             manifest["options_page"] as? String

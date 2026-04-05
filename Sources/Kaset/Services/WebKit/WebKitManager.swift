@@ -34,9 +34,6 @@ final class WebKitManager: NSObject, WebKitManagerProtocol {
     static let origin = "https://music.youtube.com"
 
     @MainActor
-    let processPool = WKProcessPool()
-
-    @MainActor
     let webExtensionController = WKWebExtensionController()
 
     /// Required cookie name for authentication.
@@ -255,7 +252,6 @@ final class WebKitManager: NSObject, WebKitManagerProtocol {
     /// Creates a WebView configuration using the shared persistent data store.
     func createWebViewConfiguration() -> WKWebViewConfiguration {
         let configuration = WKWebViewConfiguration()
-        configuration.processPool = self.processPool
         configuration.websiteDataStore = self.dataStore
 
         #if compiler(>=5.9)
