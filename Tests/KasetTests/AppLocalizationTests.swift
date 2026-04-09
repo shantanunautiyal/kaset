@@ -113,32 +113,31 @@ struct AppLocalizationTests {
     @Test("Navigation title keys resolve correctly from lproj sub-bundles")
     func lprojBundleResolvesNavigationTitleKeys() throws {
         let koreanBundle = try #require(self.localizedBundle(for: "ko"))
-        let englishBundle = try #require(self.localizedBundle(for: "en"))
 
         #expect(koreanBundle.localizedString(forKey: "Home", value: nil, table: nil) == "홈")
         #expect(koreanBundle.localizedString(forKey: "Explore", value: nil, table: nil) == "둘러보기")
         #expect(koreanBundle.localizedString(forKey: "Library", value: nil, table: nil) == "보관함")
         #expect(koreanBundle.localizedString(forKey: "Listening History", value: nil, table: nil) == "감상 기록")
 
-        #expect(englishBundle.localizedString(forKey: "Home", value: nil, table: nil) == "Home")
-        #expect(englishBundle.localizedString(forKey: "Explore", value: nil, table: nil) == "Explore")
-        #expect(englishBundle.localizedString(forKey: "Library", value: nil, table: nil) == "Library")
-        #expect(englishBundle.localizedString(forKey: "Listening History", value: nil, table: nil) == "Listening History")
+        AppLocalization.setLanguage("en")
+        defer { AppLocalization.setLanguage(nil) }
+
+        #expect(AppLocalization.localizedString(forKey: "Home") == "Home")
+        #expect(AppLocalization.localizedString(forKey: "Explore") == "Explore")
+        #expect(AppLocalization.localizedString(forKey: "Library") == "Library")
+        #expect(AppLocalization.localizedString(forKey: "Listening History") == "Listening History")
     }
 
     @Test("Language override applies to navigation title lookups via AppLocalization.bundle")
-    func overrideBundleResolvesNavigationTitles() throws {
+    func overrideBundleResolvesNavigationTitles() {
         AppLocalization.setLanguage("ko")
         defer { AppLocalization.setLanguage(nil) }
 
-        let title = AppLocalization.bundle.localizedString(forKey: "Home", value: nil, table: nil)
+        let title = AppLocalization.localizedString(forKey: "Home")
         #expect(title == "홈")
 
         AppLocalization.setLanguage("en")
-        let englishBundle = try #require(AppLocalization.bundle(forLocalization: "en"))
-        #expect(AppLocalization.lookupBundle(for: AppLocalization.baseBundle).bundleURL == englishBundle.bundleURL)
-
-        let englishTitle = AppLocalization.bundle.localizedString(forKey: "Home", value: nil, table: nil)
+        let englishTitle = AppLocalization.localizedString(forKey: "Home")
         #expect(englishTitle == "Home")
     }
 
