@@ -56,11 +56,12 @@ final class ExtensionsManager {
     static let shared = ExtensionsManager()
 
     private let logger = DiagnosticsLogger.extensions
+    private let persistenceURL: URL?
 
     /// All managed extensions, in display order.
     private(set) var extensions: [ManagedExtension] = []
 
-    private static var persistenceURL: URL? {
+    private static var defaultPersistenceURL: URL? {
         guard let appSupport = FileManager.default.urls(
             for: .applicationSupportDirectory,
             in: .userDomainMask
@@ -70,13 +71,20 @@ final class ExtensionsManager {
             .appendingPathComponent("extensions.json")
     }
 
-    private init() {
-        self.extensions = Self.load()
+    private var managedExtensionsDirectoryURL: URL? {
+        self.persistenceURL?
+            .deletingLastPathComponent()
+            .appendingPathComponent("ManagedExtensions", isDirectory: true)
+    }
+
+    init(persistenceURL: URL? = ExtensionsManager.defaultPersistenceURL) {
+        self.persistenceURL = persistenceURL
+        self.extensions = Self.load(from: persistenceURL)
     }
 
     // MARK: - Persistence
 
-    private static func load() -> [ManagedExtension] {
+    private static func load(from persistenceURL: URL?) -> [ManagedExtension] {
         guard let url = persistenceURL,
               let data = try? Data(contentsOf: url),
               let decoded = try? JSONDecoder().decode([ManagedExtension].self, from: data)
@@ -87,7 +95,7 @@ final class ExtensionsManager {
     }
 
     private func save() {
-        guard let url = Self.persistenceURL else { return }
+        guard let url = self.persistenceURL else { return }
         do {
             let dir = url.deletingLastPathComponent()
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -105,7 +113,7 @@ final class ExtensionsManager {
     func resolvedURLs() -> [(id: String, url: URL)] {
         var result: [(id: String, url: URL)] = []
 
-        guard let base = Self.persistenceURL?.deletingLastPathComponent().appendingPathComponent("ManagedExtensions", isDirectory: true) else {
+        guard let base = self.managedExtensionsDirectoryURL else {
             return []
         }
 
@@ -176,7 +184,9 @@ final class ExtensionsManager {
         self.logger.info("Manifest Analysis: Name=\(name), V\(manifestVersion), Options=\(optionsPath ?? "none"), Popup=\(popupPath ?? "none")")
 
         // 3. Perform Copy
-        let extensionsDir = Self.persistenceURL!.deletingLastPathComponent().appendingPathComponent("ManagedExtensions", isDirectory: true)
+        guard let extensionsDir = self.managedExtensionsDirectoryURL else {
+            throw NSError(domain: "ExtensionsManager", code: 3, userInfo: [NSLocalizedDescriptionKey: "Could not determine the extensions storage location."])
+        }
         try FileManager.default.createDirectory(at: extensionsDir, withIntermediateDirectories: true)
 
         let relativePath = UUID().uuidString
@@ -205,9 +215,10 @@ final class ExtensionsManager {
     func removeExtension(id: String) {
         guard let index = self.extensions.firstIndex(where: { $0.id == id }) else { return }
         let ext = self.extensions[index]
-        let extensionsDir = Self.persistenceURL!.deletingLastPathComponent().appendingPathComponent("ManagedExtensions", isDirectory: true)
-        let destURL = extensionsDir.appendingPathComponent(ext.relativePath)
-        try? FileManager.default.removeItem(at: destURL)
+        if let extensionsDir = self.managedExtensionsDirectoryURL {
+            let destURL = extensionsDir.appendingPathComponent(ext.relativePath)
+            try? FileManager.default.removeItem(at: destURL)
+        }
 
         self.extensions.remove(at: index)
         self.save()
